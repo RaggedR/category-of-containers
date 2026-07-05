@@ -1,0 +1,826 @@
+\documentclass[11pt,a4paper]{book}
+
+\usepackage[margin=2.6cm]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{stmaryrd}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usepackage{tikz-cd}
+\usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
+
+%% ---- Notation (kept consistent with the rest of the repo) ----
+\newcommand{\Set}{\mathbf{Set}}
+\newcommand{\Cat}{\mathbf{Cat}}
+\newcommand{\Cof}{\mathbf{Cof}}
+\newcommand{\Cont}{\mathbf{Cont}}
+\newcommand{\DCont}{\mathbf{DCont}}
+\newcommand{\Poly}{\mathbf{Poly}}
+\newcommand{\cont}[2]{#1 \triangleleft #2}
+\newcommand{\Ext}[1]{\llbracket #1 \rrbracket}
+\newcommand{\id}{\mathrm{id}}
+\newcommand{\cod}{\mathrm{cod}}
+\newcommand{\dom}{\mathrm{dom}}
+\newcommand{\ob}{\mathrm{ob}\,}
+\newcommand{\sh}{\sharp}
+\newcommand{\co}{\mathrel{\text{\reflectbox{$\rightharpoonup$}}}}
+\DeclareMathOperator{\Hom}{Hom}
+\DeclareMathOperator{\End}{End}
+\newcommand{\Cathash}{\mathbb{C}\mathrm{at}^\sharp}
+
+%% ---- Flagging environments (Neil's convention) ----
+\theoremstyle{plain}
+\newtheorem{Theorem}{Theorem}[chapter]
+\newtheorem{Proposition}[Theorem]{Proposition}
+\newtheorem{Lemma}[Theorem]{Lemma}
+\newtheorem{Corollary}[Theorem]{Corollary}
+\newtheorem{Conjecture}[Theorem]{Conjecture}
+\theoremstyle{definition}
+\newtheorem{Definition}[Theorem]{Definition}
+\newtheorem{Example}[Theorem]{Example}
+\theoremstyle{remark}
+\newtheorem{Remark}[Theorem]{Remark}
+
+%% A small macro for the mandatory provenance tag, so it is visually uniform.
+\newcommand{\prov}[1]{\hfill\textsf{\footnotesize[#1]}}
+
+\title{\textbf{The Category of Containers}\\[0.4em]
+  \large a living reference}
+\author{MacBeth}
+\date{Draft, June 2026, v0.1}
+
+\begin{document}
+\maketitle
+
+\frontmatter
+\tableofcontents
+
+\chapter{Preface}
+\markboth{PREFACE}{PREFACE}
+
+\section*{Purpose of this document}
+
+This is a single, evolving reference centred on \emph{the category of
+containers}. It is meant to grow: chapters are added and revised in place,
+and the whole document compiles to one PDF that can be read end to end or
+consulted by section. The organising thesis is the equivalence chain
+\[
+  \textbf{Containers} \ \simeq\ \textbf{Directed Containers}
+  \ \simeq\ \textbf{Polynomial Comonoids} \ \simeq\ \textbf{Small Categories},
+\]
+which we take as the foundation for \emph{verified composition}: once a
+system (a supply chain, an agent hierarchy, a state space, a tax computation)
+is presented as a container, its composition is governed by the structure of
+$\Cont$ and of the comonoids inside it, and correctness of composition becomes
+a statement that can be proved --- and, increasingly, machine-checked. Object
+level equivalence is settled groundwork; the live mathematics lives at the
+\emph{morphism} level, and that is where this book spends most of its effort.
+
+\section*{The flagging convention}
+
+Mathematical honesty is the first principle of this document. Every
+\textbf{Definition} and every result is flagged, and every
+\textbf{Theorem}/\textbf{Proposition}/\textbf{Lemma}/\textbf{Corollary}
+statement \emph{ends with a bracketed provenance tag}, one of:
+\begin{itemize}[nosep]
+  \item \textsf{[Cited: \textit{author year, ref}]} --- a known result from the
+        literature, not claimed as new;
+  \item \textsf{[MacBeth]} --- claimed and/or proved by MacBeth, informally
+        (not machine-checked);
+  \item \textsf{[MacBeth, Lean-verified: \textit{file}]} --- machine-checked in
+        the repository's \texttt{lean/} tree, in the named source file;
+  \item \textsf{[Conjecture, MacBeth]} or \textsf{[Open]} --- for conjectures.
+\end{itemize}
+A tag \textsf{[Cited:\,\ldots]} on a statement that MacBeth has also verified
+independently will say so; when in doubt the weaker (cited, not-checked) tag is
+used, and a footnote records the uncertainty. The bias is deliberately towards
+\emph{under}-claiming. The reading and citation tracker in
+Appendix~\ref{app:tracker} records, paper by paper, how thoroughly each source
+has been engaged.
+
+A note on the Lean tags. Only two Lean \emph{source} files are committed to the
+repository at the time of this draft: \texttt{Basic.lean} (the container
+representation theorem) and \texttt{Directed.lean} (the comonad laws from the
+directed-container laws). Results checked in those files carry the
+\textsf{Lean-verified} tag naming the committed file. Where MacBeth has a Lean
+formalisation that is \emph{not} yet committed as source to this repository
+(notably the $\DCont\cong\Cof$ and Zappa--Sz\'ep associativity developments),
+the statement is tagged \textsf{[Cited]} for the underlying theorem and a
+footnote flags that the Lean source is not in this tree --- so the reader is
+never told something is machine-checked here when its source cannot be found
+here.
+
+\mainmatter
+
+\chapter{Containers and their extension functor}
+\label{ch:cont}
+
+\section{Containers}
+
+\begin{Definition}[Container]\label{def:container}
+A \emph{container} is a pair $\cont SP$ where $S$ is a set of \emph{shapes} and
+$P\colon S\to\Set$ is a family of \emph{positions}, one set $P(s)$ for each shape
+$s$. Its \emph{extension} (or \emph{interpretation}) is the functor
+$\Ext{\cont SP}\colon\Set\to\Set$ defined on objects by
+\[
+  \Ext{\cont SP}(X) \;=\; \coprod_{s\in S} X^{P(s)}
+    \;=\; \bigl\{ (s,v) \mid s\in S,\ v\colon P(s)\to X \bigr\},
+\]
+and on a morphism $f\colon X\to Y$ by postcomposition,
+$\Ext{\cont SP}(f)(s,v) = (s,\, f\circ v)$.
+\end{Definition}
+
+Unpacking: a shape $s$ is a structure with its positions $P(s)$; a labelling
+$v\colon P(s)\to X$ fills every position with an element of $X$; the coproduct
+over $s$ is the disjoint union ``pick exactly one shape''. The functorial action
+relabels --- it changes the data at the positions but never the shape, so the
+\emph{shape projection} $\pi(s,v)=s$ is a natural transformation to the constant
+functor at $S$. A container thus separates \emph{structure} (the shape) from
+\emph{content} (the labels), and its functorial action is exactly \texttt{map}.
+
+\begin{Example}[The container menagerie]\label{ex:menagerie}
+\textbf{Maybe}: two shapes, ``nothing'' ($P=\varnothing$, term $X^0=1$) and
+``just'' ($P=\{*\}$, term $X$); extension $1+X$.
+\textbf{Lists}: shape $n\in\mathbb N$, positions $\{0,\dots,n-1\}$; extension
+$\sum_{n} X^n$.
+\textbf{Binary trees}: a shape is a planar binary tree, positions are leaves;
+the generating function satisfies $T(X)=1+X\cdot T(X)^2$, so the number of shapes
+with $n$ positions is the Catalan number $C_n=\frac1{n+1}\binom{2n}{n}$.
+\textbf{Matrices}: shape $(m,n)$, positions the $mn$ entries; extension
+$\sum_{m,n} X^{m\times n}$. In each case the coefficient of $X^n$ in the
+generating function counts \emph{how many} shapes have $n$ positions, while the
+container remembers \emph{which} shapes and \emph{where} the positions are.
+\end{Example}
+
+A standing intuition (``decategorification''): writing $\sum_s X^{P(s)}$ as if it
+were a polynomial in a formal indeterminate $X$ guides the right intuitions about
+products, composition and derivatives. But $X$ is a \emph{set}, not an
+indeterminate: $X^{P(s)}=\Hom(P(s),X)$ is a set of functions, and the extension
+lives in $[\Set,\Set]$, not in a ring of power series.
+
+\section{The representation theorem}
+
+The combinatorial data of containers captures \emph{exactly} the natural
+transformations between their extensions.
+
+\begin{Theorem}[Representation / full faithfulness]\label{thm:rep}
+The extension functor $\Ext{-}\colon\Cont\to[\Set,\Set]$ is full and faithful:
+every natural transformation $\Ext{\cont{S_1}{P_1}}\Rightarrow\Ext{\cont{S_2}{P_2}}$
+arises from a unique container morphism, and distinct morphisms induce distinct
+natural transformations.
+\prov{Cited: Abbott--Altenkirch--Ghani 2005}%
+\footnote{Independently formalised by MacBeth in the committed Lean file
+\texttt{lean/Containers/Containers/Basic.lean} (round-trip
+\texttt{ContainerMorphism}\,$\leftrightarrow$\,\texttt{ExtNatTrans}, no
+\texttt{sorry}).}
+\end{Theorem}
+
+\begin{proof}[Proof sketch]
+By the Yoneda lemma a natural transformation $\alpha$ is determined by its action
+on the ``generic element'' $(s,\id_{P_1(s)})\in\Ext{\cont{S_1}{P_1}}(P_1(s))$ of
+each shape: $\alpha_{P_1(s)}(s,\id)=(u(s),f_s)$ reads off both a shape map
+$u\colon S_1\to S_2$ and a position map $f_s\colon P_2(u(s))\to P_1(s)$, and
+naturality forces every other component. Conversely every $(u,f)$ is natural
+(Chapter~\ref{ch:contcat}). See \cite{AAG05} for the full argument; the
+round-trip is machine-checked in \texttt{Basic.lean}.
+\end{proof}
+
+\chapter{The category \texorpdfstring{$\Cont$}{Cont}}
+\label{ch:contcat}
+
+\section{Container morphisms: the variance}
+
+\begin{Definition}[Container morphism]\label{def:contmor}
+A \emph{container morphism} $(u,f)\colon\cont{S_1}{P_1}\to\cont{S_2}{P_2}$ consists
+of
+\begin{itemize}[nosep]
+  \item a \emph{shape map} $u\colon S_1\to S_2$ (\emph{forward}), and
+  \item for each $s\in S_1$, a \emph{position map}
+        $f_s\colon P_2(u(s))\to P_1(s)$ (\emph{backward}).
+\end{itemize}
+It induces the natural transformation $\alpha_X(s,v)=\bigl(u(s),\, v\circ f_s\bigr)$.
+\end{Definition}
+
+The variance is not a convention but a necessity. To build a new labelling of the
+\emph{output} positions $P_2(u(s))$ out of an old labelling $v\colon P_1(s)\to X$
+without inspecting labels, the only move is to precompose:
+\[
+  P_2(u(s)) \xrightarrow{\ f_s\ } P_1(s) \xrightarrow{\ v\ } X,
+\]
+which forces $f_s$ to run from output positions to input positions. Each output
+position $p'$ asks ``which input position supplies my label?'' and the answer is
+$f_s(p')$. Consequently a container morphism can only \emph{rearrange},
+\emph{discard} or \emph{duplicate} labels --- never \emph{create} one. (Sorting,
+filtering and thresholding are \emph{not} container morphisms: they inspect
+labels, and so are not natural in $X$.)
+
+\begin{Definition}[Identity and composition]\label{def:contcomp}
+The identity on $\cont SP$ is $(\id_S,\id)$. The composite of
+$(u,f)\colon\cont{S_1}{P_1}\to\cont{S_2}{P_2}$ and
+$(u',f')\colon\cont{S_2}{P_2}\to\cont{S_3}{P_3}$ has shape map $u'\circ u$ and
+position map running backward through both stages,
+\[
+  (u'\circ u)^\sharp_s \;=\; f_s\circ f'_{u(s)}\colon
+   P_3\bigl(u'(u(s))\bigr) \xrightarrow{\ f'_{u(s)}\ } P_2(u(s))
+   \xrightarrow{\ f_s\ } P_1(s).
+\]
+These satisfy the category axioms; the resulting category is $\Cont$.
+\end{Definition}
+
+\begin{Proposition}[Naturality and the correspondence]\label{prop:nat}
+For every container morphism $(u,f)$, the family $\alpha_X(s,v)=(u(s),v\circ f_s)$
+is natural in $X$; and (Theorem~\ref{thm:rep}) every natural transformation
+between container extensions is $\alpha$ for a unique $(u,f)$. Hence
+$\Ext{-}\colon\Cont\to[\Set,\Set]$ is an isomorphism onto its image.
+\prov{Cited: AAG05}
+\end{Proposition}
+
+\begin{proof}
+Naturality is associativity of composition: for $g\colon X\to Y$, both ways round
+the naturality square send $(s,v)$ to $(u(s),\, g\circ v\circ f_s)$, because
+$f_s$ does not look at labels. Full faithfulness is Theorem~\ref{thm:rep}.
+\end{proof}
+
+\section{Worked example: \texttt{tail}}
+
+The function $\mathrm{tail}\colon\mathrm{List}(X)\to 1+\mathrm{List}(X)$ is a
+container morphism $(u,f)$: the shape map sends length $n$ to length $n-1$ (and
+$0$ to ``nothing''), and the (backward) position map sends position $i$ of the
+output to position $i+1$ of the input. The same $(u,f)$ acts on lists of integers,
+strings, or anything --- the labels are shifted one place left, never inspected.
+This is the content of naturality: the morphism is parametric in the label type.
+
+\chapter{Algebraic structure on \texorpdfstring{$\Cont$}{Cont}}
+\label{ch:algebra}
+
+This chapter is, by design, partly an \emph{outline with cited statements}. The
+monoidal and closed structures on containers are most cleanly developed in the
+polynomial-functor setting, where $\Cont$ embeds as the full subcategory $\Poly$
+of polynomial endofunctors. We record the structures, cite their sources, and
+flag carefully which MacBeth has personally verified. We do \emph{not} reprove
+them here, and we do not invent proofs.
+
+\begin{Remark}[Containers and polynomial functors]
+A container $\cont SP$ presents the polynomial functor
+$X\mapsto\sum_{s\in S}X^{P(s)}$; the category $\Poly$ of polynomial functors and
+natural transformations is equivalent to $\Cont$ (this is
+Theorem~\ref{thm:rep} read as ``$\Poly\simeq\Cont$''). We use the two names
+interchangeably and adopt Spivak's catalogue of monoidal structures on $\Poly$
+\cite{Spivak21}.
+\end{Remark}
+
+\section{Products and coproducts}
+
+\begin{Proposition}[Coproducts in $\Cont$]\label{prop:coprod}
+$\Cont$ has all coproducts: the coproduct of $\cont{S_i}{P_i}$ has shape set
+$\coprod_i S_i$ and positions inherited shapewise,
+$P\bigl((i,s)\bigr)=P_i(s)$. On extensions it is the pointwise coproduct of
+functors, $\Ext{\coprod_i C_i}=\coprod_i\Ext{C_i}$.
+\prov{Cited: AAG05; Spivak 2021}
+\end{Proposition}
+
+\begin{Proposition}[Products in $\Cont$]\label{prop:prod}
+$\Cont$ has all products: the product of $\cont{S_1}{P_1}$ and $\cont{S_2}{P_2}$
+has shape set $S_1\times S_2$ and positions
+$P\bigl((s_1,s_2)\bigr)=P_1(s_1)\sqcup P_2(s_2)$, so that
+$\Ext{C_1\times C_2}(X)=\Ext{C_1}(X)\times\Ext{C_2}(X)$.
+\prov{Cited: Spivak 2021}%
+\footnote{Stated as in \cite{Spivak21}; the coproduct (Prop.~\ref{prop:coprod})
+MacBeth has checked directly on extensions, the product MacBeth has \emph{not}
+independently re-derived in full and reports it as cited.}
+\end{Proposition}
+
+\section{The monoidal menagerie}
+
+Spivak \cite{Spivak21} catalogues several monoidal structures on $\Poly$. We list
+the ones relevant to this book; the reader should treat each as
+\emph{cited, not independently checked} unless tagged otherwise.
+
+\begin{Definition}[The four products, after Spivak 2021]\label{def:menagerie}
+On $\Poly\simeq\Cont$ there are, among others:
+\begin{itemize}[nosep]
+  \item the \emph{coproduct} $+$ (Prop.~\ref{prop:coprod}), unit the initial
+        polynomial $0$;
+  \item the \emph{product} $\times$ (Prop.~\ref{prop:prod}), unit the terminal
+        polynomial $1$;
+  \item the \emph{Dirichlet (parallel) tensor} $\otimes$: on shapes
+        $S_1\times S_2$, on positions $P_1(s_1)\times P_2(s_2)$, so that
+        $\Ext{C_1\otimes C_2}(X)=\sum_{s_1,s_2}X^{P_1(s_1)\times P_2(s_2)}$; unit
+        the identity polynomial $X\mapsto X$ (\,$1\triangleleft 1$\,);
+  \item the \emph{composition (substitution) product} $\triangleleft$, with
+        $\Ext{C_1\triangleleft C_2}=\Ext{C_1}\circ\Ext{C_2}$; unit the identity
+        polynomial. This is the \emph{sequencing} product, and comonoids for it
+        are the subject of Chapter~\ref{ch:comonoids}.
+\end{itemize}
+\prov{Cited: Spivak 2021}
+\end{Definition}
+
+\begin{Remark}[Honesty about $\otimes$ vs.\ $\times$]
+The symbols are easy to confuse. The \emph{Dirichlet} tensor $\otimes$ multiplies
+\emph{position sets} ($P_1\times P_2$); the categorical \emph{product} $\times$
+takes a \emph{disjoint union} of position sets ($P_1\sqcup P_2$). They have the
+same shape set $S_1\times S_2$ but different position data and different
+extensions. Both are due to Spivak's catalogue \cite{Spivak21}; MacBeth has
+verified the shape/position formulas combinatorially on small cases but defers
+the unit and coherence laws to \cite{Spivak21}.
+\end{Remark}
+
+\begin{Definition}[Closed structures]\label{def:closed}
+$(\Poly,\otimes)$ and $(\Poly,\times)$ are closed: each has an internal hom
+(``$[\,-,-\,]$'') right adjoint to the corresponding tensor. The composition
+product $\triangleleft$ is \emph{not} symmetric and its closure is subtler (the
+relevant right adjoints exist only in restricted forms).
+\prov{Cited: Spivak 2021}%
+\footnote{The internal homs are stated as in \cite{Spivak21}; MacBeth has
+\emph{not} independently verified the adjunctions and reports them as cited.}
+\end{Definition}
+
+The free-monad and cofree-comonad constructions associated with $\triangleleft$
+are deferred to Chapter~\ref{ch:phase2}, where they belong to the functors-over-$\Cont$
+programme rather than to the structure of $\Cont$ itself.
+
+\chapter{Comonoids in \texorpdfstring{$\Cont$}{Cont}: directed containers and small categories}
+\label{ch:comonoids}\label{ch:phase2dummy}
+
+This is the heart of the book. We show that comonoids for the composition product
+$\triangleleft$ are \emph{directed containers}, that directed containers are
+\emph{small categories}, and --- the refinement that the rest of the grant turns
+on --- that the right \emph{morphisms} are \emph{cofunctors}, not functors.
+
+\section{Directed containers}
+
+\begin{Definition}[Directed container]\label{def:dcont}
+A \emph{directed container} is a container $\cont SP$ together with
+\begin{itemize}[nosep]
+  \item a \emph{root} $\mathsf o(s)\in P(s)$ for each $s$;
+  \item a \emph{sub-shape} operation $s\downarrow p\in S$ for $p\in P(s)$;
+  \item a \emph{shift} $p\oplus q\in P(s)$ for $p\in P(s)$, $q\in P(s\downarrow p)$;
+\end{itemize}
+subject to the five laws (for all $s$, $p\in P(s)$, $q\in P(s\downarrow p)$,
+$q'\in P((s\downarrow p)\downarrow q)$):
+\begin{align*}
+  &\text{(D1)} & s\downarrow\mathsf o(s)&=s;
+  & &\text{(D2)} & \mathsf o(s)\oplus q&=q;
+  & &\text{(D3)} & p\oplus\mathsf o(s\downarrow p)&=p;\\
+  &\text{(D4)} & s\downarrow(p\oplus q)&=(s\downarrow p)\downarrow q;
+  & &\text{(D5)} & (p\oplus q)\oplus q'&=p\oplus(q\oplus q').
+\end{align*}
+\end{Definition}
+
+\noindent D2, D3, D5 make each $P(s)$ a monoid-like structure with unit
+$\mathsf o(s)$; D1, D4 track how sub-shapes nest. (The well-typedness of D5 needs
+D4 --- exactly the dependency that recurs as a dependent-cast obstacle in the Lean
+formalisation.)
+
+\section{Directed containers are comonads}
+
+\begin{Definition}[The comonad of a directed container]\label{def:dcomonad}
+On $D:=\Ext{\cont SP}$ define
+\[
+  \varepsilon(s,v)=v(\mathsf o(s)),\qquad
+  \delta(s,v)=\bigl(s,\ \lambda p.\,(s\downarrow p,\ \lambda q.\, v(p\oplus q))\bigr).
+\]
+\end{Definition}
+
+\begin{Theorem}[Comonad laws $\Longleftrightarrow$ D1--D5]\label{thm:comonad}
+$(D,\varepsilon,\delta)$ is a comonad, and each comonad law is exactly one
+directed-container law: left counit is D1 (shape) and D2 (value); right counit is
+D3; coassociativity is D4 (shapes) and D5 (deepest values). Conversely a comonad
+of this form forces D1--D5.
+\prov{Cited: Ahman--Chapman--Uustalu 2014; MacBeth, Lean-verified:
+Directed.lean}
+\end{Theorem}
+
+\begin{proof}[Proof sketch]
+Direct calculation. For left counit, $\varepsilon(\delta(s,v))$ reduces to
+$(s\downarrow\mathsf o(s),\,\lambda q.\,v(\mathsf o(s)\oplus q))$, which is $(s,v)$
+by D1 then D2. Right counit is D3; coassociativity unfolds both composites to a
+common triple nest, equal by D4 (inner shapes) and D5 (deepest values). The full
+computation, and the converse, are checked with zero \texttt{sorry} in the
+committed file \texttt{lean/Containers/Containers/Directed.lean}
+(\texttt{left\_counit}, \texttt{right\_counit}, \texttt{coassoc}); the
+``container is a comonad'' direction is Ahman--Chapman--Uustalu \cite{ACU14}.
+\end{proof}
+
+\section{Directed containers are small categories}
+
+\begin{Theorem}[Object dictionary]\label{thm:objdict}
+Directed-container structures on $\cont SP$ are in bijection with small categories
+$\mathcal C$ with object set $S$ and, for each $s$,
+$P(s)=\coprod_{s'}\mathcal C(s,s')$ the morphisms \emph{out of} $s$, under
+\[
+  \ob\mathcal C=S,\quad
+  \mathcal C(s,s')=\{p\in P(s):s\downarrow p=s'\},\quad
+  \id_s=\mathsf o(s),\quad
+  q\circ p=p\oplus q .
+\]
+In particular $s\downarrow p=\cod(p)$, and every small category arises from a
+unique directed container.
+\prov{Cited: Ahman--Uustalu 2016}
+\end{Theorem}
+
+Combining Theorems~\ref{thm:comonad} and \ref{thm:objdict} with the polynomial
+incarnation gives the object-level chain promised in the Preface: a directed
+container is a comonoid in $(\Poly,\triangleleft)$, hence
+\[
+  \textbf{Containers}\ \supseteq\ \textbf{Directed Containers}
+  \ \cong\ \textbf{Polynomial Comonoids}\ \cong\ \textbf{Small Categories}.
+\]
+
+\section{The morphism refinement: \texorpdfstring{$\DCont\cong\Cof$}{DCont = Cof}}
+
+A dictionary on objects invites a dictionary on morphisms. The naive guess --- a
+morphism of directed containers is a \emph{functor} --- is \emph{false on
+variance}. A container morphism has a backward position map
+$f^\sharp_s\colon P'(fs)\to P(s)$, whereas a functor pushes morphisms forward. The
+maps native to directed containers are \emph{cofunctors}.
+
+\begin{Definition}[Cofunctor / retrofunctor]\label{def:cofunctor}
+A \emph{cofunctor} $\varphi\colon\mathcal C\co\mathcal D$ is an object map
+$\varphi_0\colon\ob\mathcal C\to\ob\mathcal D$ together with a \emph{lift}: for each
+object $c$ and each $h\colon\varphi_0 c\to d$ in $\mathcal D$, a morphism
+$\varphi^\uparrow(c,h)\colon c\to c'$ in $\mathcal C$, subject to
+\begin{align*}
+  \text{(C0)}\ & \varphi_0(\cod\varphi^\uparrow(c,h))=\cod(h);\quad
+  \text{(C1)}\ \varphi^\uparrow(c,\id_{\varphi_0 c})=\id_c;\\
+  \text{(C2)}\ & \varphi^\uparrow(c,h'\circ h)=\varphi^\uparrow(c',h')\circ
+        \varphi^\uparrow(c,h),\quad c'=\cod\varphi^\uparrow(c,h).
+\end{align*}
+Small categories and cofunctors form a category $\Cof$.
+\prov{Cited: Aguiar 1997; Clarke 2020; Spivak 2021 (Def.\ 3.21)}
+\end{Definition}
+
+\begin{Remark}[$\Cof=\Cathash$]
+$\Cof$ is exactly $\Cathash=\mathrm{Comod}(\Poly)$, the category of comonoids in
+$(\Poly,\triangleleft)$ and their morphisms: a cofunctor \emph{is} a comonoid
+homomorphism \cite{Spivak21,SS2405}. This is why the object dictionary
+(Theorem~\ref{thm:objdict}) cannot extend to $\Cat$: functors are carried not by
+comonoid morphisms but by bicomodules \cite{SS23}.
+\end{Remark}
+
+\begin{Definition}[Directed-container morphism]\label{def:dcm}
+A \emph{morphism of directed containers} $D\to D'$ is a container morphism
+$(f,f^\sharp)$ with $f\colon S\to S'$ and $f^\sharp_s\colon P'(fs)\to P(s)$,
+satisfying, for all $s$, $h\in P'(fs)$, $k\in P'((fs)\downarrow' h)$,
+\begin{align*}
+  \text{(M0)}\ & f(s\downarrow f^\sharp_s(h))=(fs)\downarrow' h;\quad
+  \text{(M1)}\ f^\sharp_s(\mathsf o'(fs))=\mathsf o(s);\\
+  \text{(M2)}\ & f^\sharp_s(h\oplus' k)=
+        f^\sharp_s(h)\ \oplus\ f^\sharp_{\,s\downarrow f^\sharp_s(h)}(k).
+\end{align*}
+\end{Definition}
+
+\begin{Theorem}[The morphism dictionary]\label{thm:dcontcof}
+The assignment $(f,f^\sharp)\mapsto(\varphi_0:=f,\ \varphi^\uparrow(s,h):=f^\sharp_s(h))$
+is a bijection on every hom-set carrying (M0)--(M2) to (C0)--(C2) term for term,
+and it respects identities and composition. It is moreover a bijection on objects
+(Theorem~\ref{thm:objdict}). Hence there is an isomorphism of categories
+\[
+  \DCont\ \cong\ \Cof .
+\]
+\prov{Cited: Ahman--Uustalu 2016 \S3.2--3; Shapiro--Spivak 2023, Cor.\,5.12}%
+\footnote{MacBeth has formalised this isomorphism in Lean (file
+\texttt{Cofunctor.lean}, built and reported zero-\texttt{sorry} in
+\texttt{papers/dcont-cof.tex}), but that source is \emph{not yet committed} to
+this repository's \texttt{lean/} tree; so the statement is tagged \textsf{[Cited]}
+here, not \textsf{Lean-verified}, pending the source landing in the repo. The
+\emph{identification} of Ahman--Uustalu's ``relative split pre-opcleavages'' with
+Spivak's cofunctors, and the bridge to delta lenses below, are MacBeth's
+connective contribution; see \texttt{papers/dcont-cof.tex}.}
+\end{Theorem}
+
+\begin{proof}[Proof sketch]
+Under the object dictionary a position $h\in P'(fs)$ is a morphism out of $fs$ and
+$f^\sharp_s(h)$ a morphism out of $s$, so $(f,f^\sharp)$ and
+$(\varphi_0,\varphi^\uparrow)$ are literally the same data. Reading $\oplus$ as
+reverse composition, (M0)$\Leftrightarrow$(C0) (codomain), (M1)$\Leftrightarrow$(C1)
+(unit), (M2)$\Leftrightarrow$(C2) (composition). Identities and composites match,
+and objects are in bijection by Theorem~\ref{thm:objdict}; a bijective-on-objects,
+fully faithful functor is an isomorphism of categories. The full term-by-term
+match is in \texttt{papers/dcont-cof.tex} (Lemma~2.5--Theorem~2.7 there).
+\end{proof}
+
+\begin{Proposition}[Functors are the opposite variance]\label{prop:cov}
+The \emph{covariant} position maps $\phi_s\colon P(s)\to P'(fs)$ subject to the
+mirror conditions (N0)--(N2) of (M0)--(M2) are in bijection with \emph{functors}
+$\mathcal C(D)\to\mathcal C(D')$. Thus a directed structure carries two notions of
+map of opposite variance: covariant gives functors, contravariant gives
+cofunctors, and only the latter is a morphism of the underlying container.
+\prov{MacBeth}%
+\footnote{Verified combinatorially over $36$ ordered pairs of small categories
+drawn from $\{\mathbf1,\mathbf2,\mathbf3,\mathbb Z/2,\mathbb Z/3,M\}$;
+\#DCont-morphisms $=$ \#cofunctors in all $36$ cases, \#op-variance-morphisms $=$
+\#functors in all $36$, and \#functors $\neq$ \#cofunctors in $17$ of the $36$.
+See \texttt{papers/dcont-cof.tex} \S5. The underlying fact that functors are
+carried by bicomodules, not comonoid morphisms, is \cite{SS23}.}
+\end{Proposition}
+
+\begin{Corollary}[Cofunctors are the Put of a delta lens]\label{cor:lens}
+A \emph{delta lens} $A\rightleftarrows B$ is a \emph{Get} functor together with a
+\emph{Put} cofunctor sharing one object map, related by the section condition
+(PutGet) $f\cdot\varphi(a,u)=u$. Under $\DCont\cong\Cof$ the Put cofunctor is
+exactly a morphism of directed containers; so a directed-container morphism is the
+update-propagating half of a bidirectional transformation.
+\prov{Cited: Clarke 2022 (arXiv:2108.00390), Def.\ 4 / Thm.\ 9}%
+\footnote{The section condition is (PutGet) $f\cdot\varphi(a,u)=u$, \emph{not}
+``$f\circ\varphi=\id$''; MacBeth flags this because the loose form recurs in the
+folklore.}
+\end{Corollary}
+
+\chapter{Composing systems: Zappa--Sz\'ep and distributive laws}
+\label{ch:zs}
+
+Chapter~\ref{ch:comonoids} settled what a single directed container is and what
+maps it has. This chapter asks how \emph{two} of them compose into one --- the
+question with the economic consequences (mis-composed supply chains lose liability
+traceability; a wrong contract composite is an exploit). We package this as a
+\emph{Zappa--Sz\'ep} (two-sided semidirect / matched-pair) product of small
+categories, the categorical generalisation of the group/monoid Zappa--Sz\'ep
+product.
+
+\section{The pairwise criterion}
+
+For objects $a,b$ of a small category, $\Hom(a,b)$ is canonically a right
+$\End(a)$-set (precomposition) and a left $\End(b)$-set (postcomposition). A
+Zappa--Sz\'ep decomposition $K=\mathcal C\bowtie\mathcal D$ of $K$ over a wide
+subcategory $\mathcal D$ asks for a \emph{unique factorisation} of each morphism
+through a transversal and an endomorphism.
+
+\begin{Theorem}[Pairwise Zappa--Sz\'ep criterion]\label{thm:zscriterion}
+Let $\mathcal D$ be a wide subcategory of $K$. Then $K=\mathcal C\bowtie\mathcal D$
+for a complementary wide subcategory $\mathcal C$ if and only if
+\begin{itemize}[nosep]
+  \item \textup{(L)} each hom-presheaf $\Hom_K(-,b)$ is a \emph{free} right
+        $\mathcal D$-set (equivalently: the source-oriented factorisation
+        $f=t\circ e$ is unique for every $f$), and
+  \item \textup{(G)} the free bases close into a wide subcategory $\mathcal C$.
+\end{itemize}
+\prov{MacBeth}%
+\footnote{This is the corrected form of the SEED conjecture ``every small category
+is a Zappa--Sz\'ep product of a poset skeleton and its vertex monoids,'' which was
+\emph{refuted} computationally (smallest counterexample: two objects, one arrow
+$s\colon a\to b$, $\End(a)=\End(b)=\mathbb Z/2$ fixing $s$, so
+$2\nmid 1=|\Hom(a,b)|$). The freeness half (L) is written up self-contained in
+\texttt{papers/pairwise-zappa-szep.tex} (a built PDF is in the repo; the
+\texttt{.tex} source is not yet committed to this tree). A brute-force enumeration
+of $\approx 26$ small categories matches the criterion exactly.}
+\end{Theorem}
+
+\begin{Theorem}[Cocycle axioms $\Longleftrightarrow$ associativity]\label{thm:zsassoc}
+The Zappa--Sz\'ep cocycle axioms ZS1--ZS4 (relating the two actions of a matched
+pair) hold if and only if the product on $\mathcal C\bowtie\mathcal D$ is
+associative.
+\prov{MacBeth}%
+\footnote{MacBeth has a Lean formalisation of the monoid case (ZS1--ZS4
+$\Longleftrightarrow$ associativity of the Zappa--Sz\'ep product) in
+\texttt{ZappaSzep.lean}, built and reported zero-\texttt{sorry}; that source is
+\emph{not yet committed} to this repository's \texttt{lean/} tree, so the tag is
+\textsf{[MacBeth]} rather than \textsf{Lean-verified} here.}
+\end{Theorem}
+
+\section{(G) as a strict factorisation system, and its $H^2$ obstruction}
+
+\begin{Proposition}[(G) is a strict factorisation system]\label{prop:sfs}
+Condition (G) --- that the free bases close into a wide subcategory --- is exactly
+the statement that the decomposition extends to a \emph{strict factorisation
+system} on $K$. Distributive laws of categories correspond to strict factorisation
+systems.
+\prov{Cited: Rosebrugh--Wood (distributive laws $\Longleftrightarrow$ SFS)}
+\end{Proposition}
+
+\begin{Theorem}[The (G) obstruction is an $H^2$ class]\label{thm:h2}
+Under a trivial-action hypothesis, (G) is classified by a second cohomology class:
+$\textup{(G)}\Longleftrightarrow[\omega]=0$, where $[\omega]$ lives in the
+\emph{Baues--Wirsching} cohomology $H^2(\mathrm{Sk}_{\mathcal C};\mathcal D)$ of the
+$\mathcal C$-skeleton with a source-only (presheaf) natural system of coefficients.
+This is the split case of the Baues--Wirsching linear-extension classification.
+\prov{MacBeth (identification), resting on Cited: Baues--Wirsching 1985}%
+\footnote{The cohomological \emph{identification} --- that the obstruction to (G)
+is a Baues--Wirsching $H^2$ class and that ``(G)$\Leftrightarrow[\omega]=0$'' is the
+split case of the BW linear-extension theorem --- is MacBeth's; the underlying
+classification theorem is Baues--Wirsching, \emph{Cohomology of small categories},
+JPAA \textbf{38} (1985) 187--211 (modern account: arXiv:2508.00727). The rigid
+twist of the counterexample above is the $\mathbb Z/2$ generator; the nonabelian
+boundary is the Kac/Rosebrugh--Wood law.}
+\end{Theorem}
+
+\section{The classical anchor}
+
+\begin{Proposition}[Classical Zappa--Sz\'ep recovered]\label{prop:monoidanchor}
+Specialising Theorem~\ref{thm:zscriterion} to a one-object category (a monoid)
+recovers the classical Zappa--Sz\'ep product of monoids, and (L) becomes the
+familiar condition that the factorisation map is a bijection.
+\prov{MacBeth}%
+\footnote{MacBeth flags an earlier \emph{over}claim for correction: the
+``Ahman--Uustalu update monad as a degenerate Zappa--Sz\'ep product'' reading is
+\emph{not} a special case of the two-category matched pair --- it is a monoid acting
+on a set, not two composable monoids --- and should not be presented as such.}
+\end{Proposition}
+
+\chapter{Functors over the category of containers (Phase 2 --- outline)}
+\label{ch:phase2}
+
+This chapter is \emph{mostly} a stub sketching Neil's proposed Phase 2 programme; the one
+exception is \S\ref{sec:freecofree}, which contains worked, small-case-verified results on the
+free monad and cofree comonad. Where Chapters~\ref{ch:cont}--\ref{ch:zs} studied containers
+and the maps \emph{between} them, Phase 2 studies \emph{endofunctors of $\Cont$}
+--- operations $\Cont\to\Cont$ (equivalently $\Poly\to\Poly$) and the structures
+they carry.
+
+\paragraph{What a functor $\Cont\to\Cont$ is.} It assigns to each container a
+container, functorially in container morphisms. The programme is to identify the
+natural such operations and the (co)monad structures they support.
+
+\paragraph{Candidate examples (to be developed, not yet results).}
+\begin{itemize}[nosep]
+  \item \emph{The derivative / one-hole-context functor} $\partial$: sends
+        $\cont SP$ to the container of ``a shape with one position singled out''.
+        For lists, $\partial(\sum_n X^n)$ is the zipper. The combinatorial
+        derivative is classical for species; its container-level naturality and
+        its interaction with $\triangleleft$ are the targets here.
+  \item \emph{The free monad functor} on $(\Poly,\triangleleft)$ and the dual
+        \emph{cofree comonad functor}: the syntax/behaviour pair. These two are
+        developed concretely in \S\ref{sec:freecofree} below --- their shape/position
+        data and (co)monad laws are worked out and small-case verified, so unlike the
+        derivative bullet they are \emph{results}, not stubs.
+\end{itemize}
+
+\section{The free monad and cofree comonad of a container}
+\label{sec:freecofree}
+
+We work where W- and M-types exist (e.g.\ $\Set$). For a container $C=\cont SP$ both
+the free monad and the cofree comonad of $\Ext C$ are again containers; we give their
+shape/position data explicitly and reduce the (co)monad laws to the monoid laws of
+\emph{tree grafting} and \emph{path concatenation}. Throughout, $I=\cont 11$ is the
+$\triangleleft$-unit.
+
+\begin{Definition}[Free monad container]\label{def:freemonad}
+$C^{*}=\cont{S^{*}}{P^{*}}$ where
+$S^{*}=\mu Y.\,\bigl(1+\textstyle\sum_{s:S}(P(s)\to Y)\bigr)$ is the set of well-founded
+$C$-trees with a distinguished \emph{variable-leaf} constructor (the $1$), and $P^{*}(w)$
+is the set of variable leaves of $w$:
+$P^{*}(\bullet)=1$, $P^{*}(\mathsf{node}(s,c))=\sum_{p:P(s)}P^{*}(c(p))$.
+\end{Definition}
+
+\begin{Definition}[Cofree comonad container]\label{def:cofreecomonad}
+$C^{\infty}=\cont{S^{\infty}}{P^{\infty}}$ where
+$S^{\infty}=\nu Y.\,\textstyle\sum_{s:S}(P(s)\to Y)$ is the M-type of (possibly infinite)
+$C$-trees, and $P^{\infty}(w)$ is the set of \emph{nodes} of $w$, i.e.\ finite paths from the
+root: $P^{\infty}(\langle s,c\rangle)=1+\sum_{p:P(s)}P^{\infty}(c(p))$ (the empty path
+$\bullet$ plus the paths into each child). Each path is finite even when $w$ is infinite.
+\end{Definition}
+
+\begin{Proposition}[Extensions]\label{prop:freecofree-ext}
+$\Ext{C^{*}}A\cong\mu X.\,(A+\Ext C X)$ is the carrier of the free monad on $\Ext C$, and
+$\Ext{C^{\infty}}A\cong\nu X.\,(A\times\Ext C X)$ is the carrier of the cofree comonad on
+$\Ext C$ --- the possibly-infinite $C$-trees with \emph{every node} labelled in $A$.
+\prov{Cited: Abbott--Altenkirch--Ghani 2005 (W/M-types); Spivak 2021 (tree polynomial).
+Container-language derivation re-done here; small cases below.}
+\end{Proposition}
+
+The structure maps are container morphisms.
+\emph{Unit} $\eta:I\to C^{*}$ sends $\ast$ to the variable leaf $\bullet$.
+\emph{Multiplication} $\mu:C^{*}\triangleleft C^{*}\to C^{*}$ grafts the tree $g(p)$ into each
+variable leaf $p$ of $w$; on positions it is the canonical iso
+$P^{*}(\mathsf{graft}(w,g))\cong\sum_{p:P^{*}(w)}P^{*}(g(p))$, i.e.\ the identity.
+Dually, \emph{counit} $\varepsilon:C^{\infty}\to I$ has $f_{\varepsilon}(w)(\ast)=\bullet$
+(the root), and \emph{comultiplication} $\delta:C^{\infty}\to C^{\infty}\triangleleft
+C^{\infty}$ has $u_{\delta}(w)=(w,\lambda n.\,w/n)$ (label each node $n$ by the subtree $w/n$)
+and $f_{\delta}(w)(n,m)=n\cdot m$ (path concatenation).
+
+\begin{Theorem}[(Co)monad laws via grafting and concatenation]\label{thm:freecofree-laws}
+$(C^{*},\eta,\mu)$ is a monoid and $(C^{\infty},\varepsilon,\delta)$ a comonoid in
+$(\Cont,\triangleleft)$. The monad laws reduce to the monoid laws of grafting (the variable
+leaf is neutral; substitution is associative); the comonad laws reduce to those of path
+concatenation (the root is the empty path; concatenation is associative).
+\prov{MacBeth, 2026-06-11: laws checked by exhaustive enumeration of small labelled trees for
+$C=1+X$ (Maybe) and $C=1+X^{2}$ (binary); scripts in \texttt{projects/scratch/}.}
+\end{Theorem}
+
+\begin{Theorem}[$C^{\infty}$ is a directed container]\label{thm:cofree-dircont}
+$C^{\infty}$ is a directed container with root $\mathsf o(w)=\bullet$, sub-shape
+$w\downarrow n=w/n$ (the subtree at node $n$), and shift $n\oplus m=n\cdot m$. Laws
+\textup{D1--D5} (Def.~\ref{def:dcont}) hold, the only non-formal one being
+$w/(n\cdot m)=(w/n)/m$ behind \textup{D4}. By Theorem~\ref{thm:comonad} this directed
+container \emph{is} the comonad above: the cofree comonad of a container is the cofree
+\emph{directed} container on it. Its category (Theorem~\ref{thm:objdict}) is the
+\emph{subtree category}: objects are trees, a morphism $w\to w'$ is a node $n$ of $w$ with
+$w/n=w'$, identities are roots, composition is concatenation.
+\prov{Cited in substance: Ahman--Chapman--Uustalu (polynomial comonad $=$ category); Spivak,
+and Spivak--Niu \emph{Polynomial Functors} (cofree comonoid $=$ tree comonoid). MacBeth:
+explicit $\mathsf o/\!\downarrow\!/\oplus$ data in the D1--D5 form and the verification.}
+\end{Theorem}
+
+\begin{Example}[Maybe and binary]\label{ex:freecofree}
+For $C=1+X$ (shapes $\mathsf{nil}$ with $P=\varnothing$, $\mathsf{cons}$ with $P=1$):
+$S^{\infty}=\nu Y.\,1+Y=\bar{\mathbb N}$ (conaturals) and $\Ext{C^{\infty}}A$ is the
+nonempty colists of $A$ --- the classical $\mathsf{head}/\mathsf{tails}$ comonad; while
+$\Ext{C^{*}}A$ is the free monad on $\mathsf{Maybe}$ (lists terminated by a variable or
+$\mathsf{nil}$). For the binary container $C=1+X^{2}$, $C^{*}$ is finite binary trees with
+variable leaves and $C^{\infty}$ is possibly-infinite $A$-labelled binary trees, $\delta$
+relabelling each node by its subtree.
+\end{Example}
+
+\paragraph{Why it matters for the grant.} Free monads and cofree comonads are the
+syntax/behaviour pair for compositional systems: a system's available moves
+(free monad) and its observable unfolding (cofree comonad). Verified composition
+at this level would let one certify, e.g., that an agent-orchestration combinator
+preserves the lens (Put/Get) structure of its parts. This is flagged as the
+\emph{next direction}; nothing in this chapter is claimed as proved.
+
+\appendix
+\chapter{Reading \& citation tracker}
+\label{app:tracker}
+
+The status column records how thoroughly MacBeth has engaged each source: ``read
+in full'' (worked through, definitions and key proofs internalised), ``skimmed''
+(read for the relevant statement), or ``to-read''.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{}p{5.4cm}p{3.1cm}p{2.4cm}p{2.6cm}@{}}
+\toprule
+\textbf{Paper} & \textbf{arXiv / ref} & \textbf{Status} & \textbf{Used in} \\
+\midrule
+Abbott--Altenkirch--Ghani, \emph{Containers: constructing strictly positive types} (2005)
+  & TCS 342 & read in full & Ch.\,1--2 \\
+Ahman--Chapman--Uustalu, \emph{When is a container a comonad?} (2014)
+  & LMCS 10(3) & read in full & Ch.\,4 \\
+Ahman--Uustalu, \emph{Directed containers as categories} (2016)
+  & arXiv:1604.01187 & read in full & Ch.\,4 \\
+Spivak, \emph{Functorial aggregation / Polynomial functors} (2021)
+  & arXiv:2111.10968 & read in full & Ch.\,3--4 \\
+Shapiro--Spivak, \emph{Structures on categories of polynomials} (2023)
+  & arXiv:2305.00167 & read in full & Ch.\,4 \\
+Shapiro--Spivak, \emph{A polynomial construction of nerves} (2024)
+  & arXiv:2405.13157 & skimmed & Ch.\,4 \\
+Clarke, \emph{Internal lenses as functors and cofunctors} (2020)
+  & arXiv:2009.06835 & read in full & Ch.\,4 \\
+Clarke, \emph{Delta lenses as coalgebras for a comonad} (2022)
+  & arXiv:2108.00390 & read in full & Ch.\,4 \\
+Rosebrugh--Wood, \emph{Distributive laws and factorization} (JPAA 175, 2002)
+  & JPAA 175 & read in full & Ch.\,5 \\
+Baues--Wirsching, \emph{Cohomology of small categories} (1985)
+  & JPAA 38, 187--211 & read in full & Ch.\,5 \\
+\emph{(modern BW account)} (2025)
+  & arXiv:2508.00727 & skimmed & Ch.\,5 \\
+Aguiar, \emph{Internal categories and quantum groups} (1997)
+  & PhD, Cornell & skimmed & Ch.\,4 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{thebibliography}{99}
+
+\bibitem{AAG05} M.~Abbott, T.~Altenkirch, N.~Ghani.
+\emph{Containers: constructing strictly positive types}.
+Theoretical Computer Science \textbf{342} (2005) 3--27.
+
+\bibitem{ACU14} D.~Ahman, J.~Chapman, T.~Uustalu.
+\emph{When is a container a comonad?}
+Logical Methods in Computer Science \textbf{10}(3), 2014.
+
+\bibitem{AU16} D.~Ahman, T.~Uustalu.
+\emph{Directed containers as categories}.
+Proc.\ MSFP 2016, EPTCS \textbf{207}, 89--98.
+\href{https://arxiv.org/abs/1604.01187}{arXiv:1604.01187}.
+
+\bibitem{Spivak21} D.~I.~Spivak.
+\emph{Functorial aggregation} (polynomial functors).
+\href{https://arxiv.org/abs/2111.10968}{arXiv:2111.10968}, 2021.
+
+\bibitem{SS23} B.~Shapiro, D.~I.~Spivak.
+\emph{Structures on categories of polynomials}.
+\href{https://arxiv.org/abs/2305.00167}{arXiv:2305.00167}, 2023.
+
+\bibitem{SS2405} B.~Shapiro, D.~I.~Spivak.
+\emph{A polynomial construction of nerves for higher categories}.
+\href{https://arxiv.org/abs/2405.13157}{arXiv:2405.13157}, 2024.
+
+\bibitem{Clarke20} B.~Clarke.
+\emph{Internal lenses as functors and cofunctors}.
+Proc.\ ACT 2019, EPTCS \textbf{323}, 183--195.
+\href{https://arxiv.org/abs/2009.06835}{arXiv:2009.06835}.
+
+\bibitem{Clarke22} B.~Clarke.
+\emph{Delta lenses as coalgebras for a comonad}.
+\href{https://arxiv.org/abs/2108.00390}{arXiv:2108.00390}, 2022.
+
+\bibitem{Aguiar} M.~Aguiar.
+\emph{Internal categories and quantum groups}.
+PhD thesis, Cornell University, 1997.
+
+\bibitem{RW} R.~Rosebrugh, R.~J.~Wood.
+\emph{Distributive laws and factorization}.
+Journal of Pure and Applied Algebra \textbf{175} (2002) 327--353.
+
+\bibitem{BW85} H.-J.~Baues, G.~Wirsching.
+\emph{Cohomology of small categories}.
+Journal of Pure and Applied Algebra \textbf{38} (1985) 187--211.
+
+\bibitem{BWmodern} \emph{(Modern account of Baues--Wirsching cohomology)}.
+\href{https://arxiv.org/abs/2508.00727}{arXiv:2508.00727}, 2025.
+
+\end{thebibliography}
+
+\end{document}
